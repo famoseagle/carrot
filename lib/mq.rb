@@ -169,19 +169,16 @@ class MQ
     when Frame::Method
       case method = frame.payload
       when Protocol::Channel::OpenOk
-        send Protocol::Access::Request.new(:realm => '/data',
-                                           :read => true,
-                                           :write => true,
-                                           :active => true,
-                                           :passive => true)
+        send(
+          Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
+        )
 
       when Protocol::Access::RequestOk
         @ticket = method.ticket
         if @closing
-          send Protocol::Channel::Close.new(:reply_code => 200,
-                                            :reply_text => 'bye',
-                                            :method_id => 0,
-                                            :class_id => 0)
+          send(
+            Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
+          )
         end
         succeed
 
@@ -198,7 +195,7 @@ class MQ
       when Protocol::Basic::Deliver, Protocol::Basic::GetOk
         @method = method
         @header = nil
-        @body = ''
+        @body   = ''
 
         if method.is_a? Protocol::Basic::GetOk
           @consumer = get_queue{|q| q.shift }
@@ -227,12 +224,10 @@ class MQ
   end
 
   def send(*args)
-    (@_send_mutex ||= Mutex.new).synchronize do
-      args.each do |data|
-        data.ticket = @ticket if @ticket and data.respond_to? :ticket=
-        log :sending, data
-        conn.send data, :channel => @channel
-      end
+    args.each do |data|
+      data.ticket = @ticket if @ticket and data.respond_to? :ticket=
+      log(:sending, data)
+      conn.send(data, :channel => @channel)
     end
   end
 
@@ -309,7 +304,7 @@ class MQ
   # * redeclare an already-declared exchange to a different type
   # * :passive => true and the exchange does not exist (NOT_FOUND)
   #
-  def direct name = 'amq.direct', opts = {}
+  def direct(name = 'amq.direct', opts = {})
     exchanges[name] ||= Exchange.new(self, :direct, name, opts)
   end
 
@@ -395,7 +390,7 @@ class MQ
   # * redeclare an already-declared exchange to a different type
   # * :passive => true and the exchange does not exist (NOT_FOUND)
   #
-  def fanout name = 'amq.fanout', opts = {}
+  def fanout(name = 'amq.fanout', opts = {})
     exchanges[name] ||= Exchange.new(self, :fanout, name, opts)
   end
 
@@ -507,7 +502,7 @@ class MQ
   # * redeclare an already-declared exchange to a different type
   # * :passive => true and the exchange does not exist (NOT_FOUND)
   #
-  def topic name = 'amq.topic', opts = {}
+  def topic(name = 'amq.topic', opts = {})
     exchanges[name] ||= Exchange.new(self, :topic, name, opts)
   end
 
@@ -587,7 +582,7 @@ class MQ
   # * redeclare an already-declared exchange to a different type
   # * :passive => true and the exchange does not exist (NOT_FOUND)
   # * using a value other than "any" or "all" for "x-match"
-  def headers name = 'amq.match', opts = {}
+  def headers(name = 'amq.match', opts = {})
     exchanges[name] ||= Exchange.new(self, :headers, name, opts)
   end
 
@@ -657,56 +652,15 @@ class MQ
   # not wait for a reply method.  If the server could not complete the
   # method it will raise a channel or connection exception.
   #
-  def queue name, opts = {}
+  def queue(name, opts = {})
     queues[name] ||= Queue.new(self, name, opts)
-  end
-
-  # Takes a channel, queue and optional object.
-  #
-  # The optional object may be a class name, module name or object
-  # instance. When given a class or module name, the object is instantiated
-  # during this setup. The passed queue is automatically subscribed to so
-  # it passes all messages (and their arguments) to the object.
-  #
-  # Marshalling and unmarshalling the objects is handled internally. This
-  # marshalling is subject to the same restrictions as defined in the
-  # Marshal[http://ruby-doc.org/core/classes/Marshal.html] standard 
-  # library. See that documentation for further reference.
-  #
-  # When the optional object is not passed, the returned rpc reference is 
-  # used to send messages and arguments to the queue. See #method_missing 
-  # which does all of the heavy lifting with the proxy. Some client 
-  # elsewhere must call this method *with* the optional block so that 
-  # there is a valid destination. Failure to do so will just enqueue 
-  # marshalled messages that are never consumed.
-  #
-  #  EM.run do
-  #    server = MQ.rpc('hash table node', Hash)
-  #
-  #    client = MQ.rpc('hash table node')
-  #    client[:now] = Time.now
-  #    client[:one] = 1
-  #
-  #    client.values do |res|
-  #      p 'client', :values => res
-  #    end
-  #
-  #    client.keys do |res|
-  #      p 'client', :keys => res
-  #      EM.stop_event_loop
-  #    end
-  #  end
-  #
-  def rpc name, obj = nil
-    rpcs[name] ||= RPC.new(self, name, obj)
   end
 
   def close
     if @deferred_status == :succeeded
-      send Protocol::Channel::Close.new(:reply_code => 200,
-                                        :reply_text => 'bye',
-                                        :method_id => 0,
-                                        :class_id => 0)
+      send(
+        Protocol::Channel::Close.new( :reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
+      )
     else
       @closing = true
     end
@@ -738,9 +692,9 @@ class MQ
 
   def get_queue
     if block_given?
-      (@get_queue_mutex ||= Mutex.new).synchronize{
+      (@get_queue_mutex ||= Mutex.new).synchronize do
         yield( @get_queue ||= [] )
-      }
+      end
     end
   end
 

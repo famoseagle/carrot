@@ -3,19 +3,19 @@ class MQ
     include AMQP
 
     def initialize(mq, header_obj)
-      @mq = mq
+      @mq     = mq
       @header = header_obj
     end
 
     # Acknowledges the receipt of this message with the server.
     def ack
-      @mq.send Protocol::Basic::Ack.new(:delivery_tag => properties[:delivery_tag])
+      @mq.send(Protocol::Basic::Ack.new(:delivery_tag => properties[:delivery_tag]))
     end
 
     # Reject this message (XXX currently unimplemented in rabbitmq)
     # * :requeue => true | false (default false)
-    def reject opts = {}
-      @mq.send Protocol::Basic::Reject.new(opts.merge(:delivery_tag => properties[:delivery_tag]))
+    def reject(opts = {})
+      @mq.send(Protocol::Basic::Reject.new(opts.merge(:delivery_tag => properties[:delivery_tag])))
     end
 
     def method_missing meth, *args, &blk

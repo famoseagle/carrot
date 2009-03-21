@@ -1,6 +1,6 @@
 class MQ
   class Logger
-    def initialize *args, &block
+    def initialize(*args, &block)
       opts = args.pop if args.last.is_a? Hash
       opts ||= {}
 
@@ -13,7 +13,7 @@ class MQ
     attr_reader :prop
     alias :base :prop
 
-    def log severity, *args
+    def log(severity, *args)
       opts = args.pop if args.last.is_a? Hash and args.size != 1
       opts ||= {}
       opts = @prop.clone.update(opts)
@@ -34,10 +34,12 @@ class MQ
           @hostname ||= { :hostname => `hostname`.strip }
           opts.update @hostname
         when :process
-          @process_id ||= { :process_id => Process.pid,
-                            :process_name => $0,
-                            :process_parent_id => Process.ppid,
-                            :thread_id => Thread.current.object_id }
+          @process_id ||= {
+            :process_id        => Process.pid,
+            :process_name      => $0,
+            :process_parent_id => Process.ppid,
+            :thread_id         => Thread.current.object_id
+          }
           opts.update :process => @process_id
         else
           (opts[:tags] ||= []) << tag
@@ -56,7 +58,7 @@ class MQ
     end
     alias :method_missing :log
 
-    def print data = nil, &block
+    def print(data = nil, &block)
       if block
         @printer = block
       elsif data.is_a? Proc
@@ -69,7 +71,7 @@ class MQ
     end
     alias :printer :print
     
-    def self.printer &block
+    def self.printer(&block)
       @printer = block if block
       @printer
     end

@@ -4,9 +4,6 @@ module AMQP
   DIR = File.expand_path(File.dirname(File.expand_path(__FILE__)))
   $:.unshift DIR
   
-  require 'ext/em'
-  require 'ext/blankslate'
-  
   %w[ buffer spec protocol frame client ].each do |file|
     require "amqp/#{file}"
   end
@@ -14,13 +11,9 @@ module AMQP
   class << self
     @logging = false
     attr_accessor :logging
-    attr_reader :conn, :closing
+    attr_reader   :conn, :closing
     alias :closing? :closing
     alias :connection :conn
-  end
-
-  def self.connect *args
-    Client.connect *args
   end
 
   def self.settings
@@ -77,8 +70,8 @@ module AMQP
   # it is sufficient to put your code inside of an EventMachine.run
   # block. See the code examples in MQ for details.
   #
-  def self.start *args, &blk
-    @conn ||= connect *args
+  def self.start(*args, &blk)
+    @conn ||= connect(*args)
     @conn.callback(&blk) if blk
   end
 
@@ -89,21 +82,11 @@ module AMQP
   def self.stop
     if @conn and not @closing
       @closing = true
-      @conn.close{
+      @conn.close do
         yield if block_given?
-        @conn = nil
+        @conn    = nil
         @closing = false
-      }
-    end
-  end
-
-  def self.fork workers
-    EM.fork(workers) do
-      # clean up globals in the fork
-      Thread.current[:mq] = nil
-      AMQP.instance_variable_set('@conn', nil)
-
-      yield
+      end 
     end
   end
 end

@@ -195,8 +195,10 @@ class MQ
       @key = opts[:key]
 
       unless name == "amq.#{type}" or name == ''
-        @mq.send Protocol::Exchange::Declare.new(
-          { :exchange => name, :type => type, :nowait => true }.merge(opts)
+        @mq.send(
+          Protocol::Exchange::Declare.new(
+            { :exchange => name, :type => type, :nowait => true }.merge(opts)
+          )
         )
       end
     end
@@ -242,16 +244,21 @@ class MQ
     # message stays in memory and is never persisted to non-volatile (slow)
     # storage.
     #
-    def publish data, opts = {}
+    def publish(data, opts = {})
       out = []
 
-      out << Protocol::Basic::Publish.new({ :exchange => name,
-                                            :routing_key => opts.delete(:key) || @key }.merge(opts))
+      out << Protocol::Basic::Publish.new(
+        { :exchange => name, :routing_key => opts.delete(:key) || @key }.merge(opts)
+      )
       data = data.to_s
-      out << Protocol::Header.new(Protocol::Basic,
-                                  data.length, { :content_type => 'application/octet-stream',
-                                                 :delivery_mode => (opts.delete(:persistent) ? 2 : 1),
-                                                 :priority => 0 }.merge(opts))
+      out << Protocol::Header.new(
+        Protocol::Basic,
+        data.length, {
+          :content_type  => 'application/octet-stream',
+          :delivery_mode => (opts.delete(:persistent) ? 2 : 1),
+          :priority      => 0 
+        }.merge(opts)
+      )
 
       out << Frame::Body.new(data)
 
@@ -281,9 +288,9 @@ class MQ
     # bindings. If the exchange has queue bindings the server does not
     # delete it but raises a channel exception instead (MQ:Error).
     #    
-    def delete opts = {}
+    def delete(opts = {})
       @mq.send Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts))
-      @mq.exchanges.delete name
+      @mq.exchanges.delete(name)
       nil
     end
 

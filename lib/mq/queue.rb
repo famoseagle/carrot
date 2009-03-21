@@ -61,10 +61,11 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def initialize mq, name, opts = {}
-      @mq = mq
-      @opts = opts
+    def initialize(mq, name, opts = {})
+      @mq         = mq
+      @opts       = opts
       @bindings ||= {}
+
       @mq.queues[@name = name] ||= self
       @mq.send Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
     end
@@ -103,14 +104,15 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def bind exchange, opts = {}
+    def bind(exchange, opts = {})
       exchange = exchange.respond_to?(:name) ? exchange.name : exchange
       @bindings[exchange] = opts
 
-      @mq.send Protocol::Queue::Bind.new({ :queue => name,
-                                           :exchange => exchange,
-                                           :routing_key => opts.delete(:key),
-                                           :nowait => true }.merge(opts))
+      @mq.send(
+        Protocol::Queue::Bind.new(
+          { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
+        )
+      )
       self
     end
 
@@ -128,14 +130,15 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def unbind exchange, opts = {}
+    def unbind(exchange, opts = {})
       exchange = exchange.respond_to?(:name) ? exchange.name : exchange
       @bindings.delete exchange
 
-      @mq.send Protocol::Queue::Unbind.new({ :queue => name,
-                                             :exchange => exchange,
-                                             :routing_key => opts.delete(:key),
-                                             :nowait => true }.merge(opts))
+      @mq.send(
+        Protocol::Queue::Unbind.new(
+          { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
+        )
+      )
       self
     end
 
@@ -159,11 +162,10 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def delete opts = {}
-      @mq.callback{
-        @mq.send Protocol::Queue::Delete.new({ :queue => name,
-                                               :nowait => true }.merge(opts))
-      }
+    def delete(opts = {})
+      @mq.send(
+        Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
+      )
       @mq.queues.delete @name
       nil
     end
@@ -222,25 +224,22 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def pop opts = {}, &blk
+    def pop(opts = {}, &blk)
       if blk
         @on_pop = blk
         @on_pop_opts = opts
       end
 
-      @mq.get_queue{ |q|
+      @mq.get_queue do |q|
         q.push(self)
-        @mq.send Protocol::Basic::Get.new({ :queue => name,
-                                            :consumer_tag => name,
-                                            :no_ack => !opts.delete(:ack),
-                                            :nowait => true }.merge(opts))
-      }
+        @mq.send(
+          Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts))
+        )
+      end 
 
       self
     end
 
-    # Subscribes to asynchronous message delivery.
-    #
     # The provided block is passed a single message each time the
     # exchange matches a message to this queue.
     #
@@ -287,22 +286,20 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    # CAN'T DO -- Amos
-    def subscribe opts = {}, &blk
+    def subscribe(opts = {}, &blk)
       @consumer_tag = "#{name}-#{Kernel.rand(999_999_999_999)}"
       @mq.consumers[@consumer_tag] = self
 
       raise Error, 'already subscribed to the queue' if subscribed?
 
-      @on_msg = blk
+      @on_msg      = blk
       @on_msg_opts = opts
 
-      @mq.callback{
-        @mq.send Protocol::Basic::Consume.new({ :queue => name,
-                                                :consumer_tag => @consumer_tag,
-                                                :no_ack => !opts.delete(:ack),
-                                                :nowait => true }.merge(opts))
-      }
+      @mq.send(
+        Protocol::Basic::Consume.new(
+          {:queue => name, :consumer_tag => @consumer_tag, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)
+        )
+      )
       self
     end
 
@@ -327,16 +324,14 @@ class MQ
     # not wait for a reply method.  If the server could not complete the
     # method it will raise a channel or connection exception.
     #
-    def unsubscribe opts = {}, &blk
+    def unsubscribe(opts = {}, &blk)
       @on_msg = nil
       @on_cancel = blk
-      @mq.callback{
-        @mq.send Protocol::Basic::Cancel.new({ :consumer_tag => @consumer_tag }.merge(opts))
-      }
+      @mq.send(Protocol::Basic::Cancel.new({ :consumer_tag => @consumer_tag }.merge(opts)))
       self
     end
 
-    def publish data, opts = {}
+    def publish(data, opts = {})
       exchange.publish(data, opts)
     end
     
@@ -360,7 +355,7 @@ class MQ
     # See AMQP::Protocol::Header for the hash properties available from
     # the headers parameter. See #pop or #subscribe for a code example.
     #
-    def receive headers, body
+    def receive(headers, body)
       headers = MQ::Header.new(@mq, headers)
 
       if cb = (@on_msg || @on_pop)
@@ -374,13 +369,13 @@ class MQ
     #   puts num_messages
     #  }
     #
-    def status opts = {}, &blk
+    def status(opts = {}, &blk)
       @on_status = blk
-      @mq.send Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts))
+      @mq.send(Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts)))
       self
     end
 
-    def recieve_status declare_ok
+    def recieve_status(declare_ok)
       if @on_status
         m, c = declare_ok.message_count, declare_ok.consumer_count
         @on_status.call *(@on_status.arity == 1 ? [m] : [m, c])
@@ -405,16 +400,15 @@ class MQ
 
       if blk = @on_msg
         @on_msg = nil
-        subscribe @on_msg_opts, &blk
+        subscribe(@on_msg_opts, &blk)
       end
 
       if @on_pop
-        pop @on_pop_opts, &@on_pop
+        pop(@on_pop_opts, &@on_pop)
       end
     end
   
-    private
-    
+  private
     def exchange
       @exchange ||= Exchange.new(@mq, :direct, '', :key => name)
     end
