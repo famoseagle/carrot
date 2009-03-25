@@ -1,15 +1,12 @@
-class MQ
+class Carrot
   class Exchange
-    include AMQP
 
-    def initialize(mq, type, name, opts = {})
-      @mq = mq
-      @type, @name, @opts = type, name, opts
-      @mq.exchanges[@name = name] ||= self
+    def initialize(server, type, name, opts = {})
+      @server, @type, @name, @opts = server, type, name, opts
       @key = opts[:key]
 
       unless name == "amq.#{type}" or name == ''
-        @mq.send(
+        @server.send(
           Protocol::Exchange::Declare.new(
             { :exchange => name, :type => type, :nowait => true }.merge(opts)
           )
@@ -36,19 +33,19 @@ class MQ
 
       out << Frame::Body.new(data)
 
-      @mq.send *out
+      @server.send(*out)
       self
     end
 
     def delete(opts = {})
-      @mq.send Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts))
-      @mq.exchanges.delete(name)
+      @server.send(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
+      @server.exchanges.delete(name)
       nil
     end
 
     def reset
       @deferred_status = nil
-      initialize @mq, @type, @name, @opts
+      initialize(@server, @type, @name, @opts)
     end
   end
 end

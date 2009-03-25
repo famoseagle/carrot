@@ -1,13 +1,13 @@
-class MQ
+class Carrot
   class Queue
     
-    def initialize(mq, name, opts = {})
-      @mq         = mq
+    def initialize(server, name, opts = {})
+      @server     = server
       @opts       = opts
       @bindings ||= {}
-
-      @mq.queues[@name = name] ||= self
-      @mq.send Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
+      @server.send(
+        Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
+      )
     end
     attr_reader :name
 
@@ -15,7 +15,7 @@ class MQ
       exchange = exchange.respond_to?(:name) ? exchange.name : exchange
       @bindings[exchange] = opts
 
-      @mq.send(
+      @server.send(
         Protocol::Queue::Bind.new(
           { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
         )
@@ -25,9 +25,8 @@ class MQ
 
     def unbind(exchange, opts = {})
       exchange = exchange.respond_to?(:name) ? exchange.name : exchange
-      @bindings.delete exchange
-
-      @mq.send(
+      @bindings.delete(exchange)
+      @server.send(
         Protocol::Queue::Unbind.new(
           { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
         )
@@ -36,45 +35,17 @@ class MQ
     end
 
     def delete(opts = {})
-      @mq.send(
+      @server.send(
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
-      @mq.queues.delete @name
       nil
     end
 
     def pop(opts = {}, &blk)
-      @mq.get_queue do |q|
-        q.push(self)
-        @mq.send(
-          Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts))
-        )
-      end 
-
-      self
-    end
-
-    def subscribe(opts = {}, &blk)
-      @consumer_tag = "#{name}-#{Kernel.rand(999_999_999_999)}"
-      @mq.consumers[@consumer_tag] = self
-
-      raise Error, 'already subscribed to the queue' if subscribed?
-
-      @on_msg      = blk
-      @on_msg_opts = opts
-
-      @mq.send(
-        Protocol::Basic::Consume.new(
-          {:queue => name, :consumer_tag => @consumer_tag, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)
-        )
+      @server.send(
+        Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)),
+        &blk
       )
-      self
-    end
-
-    def unsubscribe(opts = {}, &blk)
-      @on_msg    = nil
-      @on_cancel = blk
-      @mq.send(Protocol::Basic::Cancel.new({ :consumer_tag => @consumer_tag }.merge(opts)))
       self
     end
 
@@ -87,7 +58,7 @@ class MQ
     end
 
     def receive(headers, body)
-      headers = MQ::Header.new(@mq, headers)
+      headers = MQ::Header.new(@server, headers)
 
       if cb = (@on_msg || @on_pop)
         cb.call *(cb.arity == 1 ? [body] : [headers, body])
@@ -96,7 +67,7 @@ class MQ
 
     def status(opts = {}, &blk)
       @on_status = blk
-      @mq.send(Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts)))
+      @server.send(Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts)))
       self
     end
 
@@ -111,13 +82,13 @@ class MQ
     def cancelled
       @on_cancel.call if @on_cancel
       @on_cancel = @on_msg = nil
-      @mq.consumers.delete @consumer_tag
+      @server.consumers.delete @consumer_tag
       @consumer_tag = nil
     end
 
     def reset
       @deferred_status = nil
-      initialize @mq, @name, @opts
+      initialize @server, @name, @opts
 
       binds = @bindings
       @bindings = {}
@@ -133,9 +104,35 @@ class MQ
       end
     end
   
+    #--------------------------------------------------
+    # def subscribe(opts = {}, &blk)
+    #   @consumer_tag = "#{name}-#{Kernel.rand(999_999_999_999)}"
+    #   @server.consumers[@consumer_tag] = self
+    # 
+    #   raise Error, 'already subscribed to the queue' if subscribed?
+    # 
+    #   @on_msg      = blk
+    #   @on_msg_opts = opts
+    # 
+    #   @server.send(
+    #     Protocol::Basic::Consume.new(
+    #       {:queue => name, :consumer_tag => @consumer_tag, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)
+    #     )
+    #   )
+    #   self
+    # end
+    # 
+    # def unsubscribe(opts = {}, &blk)
+    #   @on_msg    = nil
+    #   @on_cancel = blk
+    #   @server.send(Protocol::Basic::Cancel.new({ :consumer_tag => @consumer_tag }.merge(opts)))
+    #   self
+    # end
+    #-------------------------------------------------- 
+
   private
     def exchange
-      @exchange ||= Exchange.new(@mq, :direct, '', :key => name)
+      @exchange ||= Exchange.new(@server, :direct, '', :key => name)
     end
   end
 end
