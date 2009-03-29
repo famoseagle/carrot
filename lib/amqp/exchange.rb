@@ -1,4 +1,4 @@
-class Carrot
+module AMQP
   class Exchange
 
     def initialize(server, type, name, opts = {})
@@ -6,7 +6,7 @@ class Carrot
       @key = opts[:key]
 
       unless name == "amq.#{type}" or name == ''
-        @server.send(
+        @server.send_command(
           Protocol::Exchange::Declare.new(
             { :exchange => name, :type => type, :nowait => true }.merge(opts)
           )
@@ -30,16 +30,14 @@ class Carrot
           :priority      => 0 
         }.merge(opts)
       )
-
       out << Frame::Body.new(data)
 
-      @server.send(*out)
+      @server.send_command(*out)
       self
     end
 
     def delete(opts = {})
-      @server.send(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
-      @server.exchanges.delete(name)
+      @server.send_command(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
       nil
     end
 

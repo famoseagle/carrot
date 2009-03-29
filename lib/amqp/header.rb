@@ -1,4 +1,4 @@
-class Carrot
+module AMQP
   class Header
     def initialize(server, header_obj)
       @server = server

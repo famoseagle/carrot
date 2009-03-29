@@ -1,7 +1,8 @@
 require File.dirname(__FILE__) + '/test_helper'
 
 class CarrotTest < Test::Unit::TestCase
-  should "probably rename this file and start testing for real" do
-    flunk "hey buddy, you should probably rename this file and start testing for real"
+
+  test "simple server connection" do
+    c = Carrot.new
   end
 end

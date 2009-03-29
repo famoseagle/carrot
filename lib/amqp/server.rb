@@ -1,113 +1,79 @@
-require 'amqp/frame'
+require 'socket'
+require 'thread'
+require 'timeout'
 
-class Carrot
-  class Error < StandardError; end
+module AMQP
   class Server
     CONNECT_TIMEOUT = 1.0
     RETRY_DELAY     = 10.0
-    DEFAULT_PORT    = 56
+    DEFAULT_PORT    = 5672
 
-    attr_reader :host, :port, :status
+    attr_reader   :host, :port, :status
     attr_accessor :retry_at
 
+    class Error           < StandardError; end
+    class ConnectionError < Error; end
+    class ServerError     < Error; end
+    class ClientError     < Error; end
+    class ServerDown      < Error; end
+
     def initialize(opts = {})
-      @host   = opts[:host]
-      @port   = opts[:port]   || DEFAULT_PORT
+      @host   = opts[:host]  || 'localhost'
+      @port   = opts[:port]  || DEFAULT_PORT
+      @user   = opts[:user]  || 'guest'
+      @pass   = opts[:pass]  || 'guest'
+      @vhost  = opts[:vhost] || '/'
+      @insist = opts[:insist]
       @status = 'NOT CONNECTED'
-      @readonly    = opts[:readonly]
+
       @multithread = opts[:multithread]      
-      send(Protocol::Channel::Open.new)
+
+      write(HEADER)
+      write([1, 1, VERSION_MAJOR, VERSION_MINOR].pack('C4'))
+      receive_frame
+      #send_command(Protocol::Channel::Open.new)
+      #receive_frame
     end
 
-    def send(data, opts = {}, &block)
-      channel = opts[:channel] ||= 0
-      data = data.to_frame(channel) unless data.is_a? Frame
-      data.channel = channel
-
-      log 'send', data
-      send_command(data.to_s, &block)
+    def multithread?
+      @multithread
     end
 
-  private
-    def receive_data(data, &block)
-      @buf << data
+    def retry?
+      @retry_at.nil? or @retry_at < Time.now
+    end
 
-      while frame = Frame.parse(@buf)
-        log 'receive', frame
-        process_frame(frame)
+    def send_command(*args, &block)
+      args.each do |data|
+        #data.ticket  = @ticket if data.respond_to?(:ticket=)
+        data.ticket  = 0 if data.respond_to?(:ticket=)
+        channel      = 0
+        data         = data.to_frame(channel) unless data.is_a?(Frame)
+        data.channel = channel
+
+        log :send, data
+        write(data.to_s)
+        receive_frame(&block) if block
       end
     end
 
-    def process_frame(frame, &block)
-      log :received, frame
-
-      case frame
-      when Frame::Header
-        @header = frame.payload
-        @body = ''
-
-      when Frame::Body
-        @body << frame.payload
-        if @body.length >= @header.size
-          @header.properties.update(@method.arguments)
-          block.call(@header, @body) if block
-          @body = @header = @consumer = @method = nil
-        end
-
-      when Frame::Method
-        case method = frame.payload
-        when Protocol::Channel::OpenOk
-          send(
-            Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
-          )
-
-        when Protocol::Access::RequestOk
-          block.call(method) if block
-
-        when Protocol::Basic::CancelOk
-          block.call if block
-
-        when Protocol::Queue::DeclareOk
-          block.call(method) if block
-
-        when Protocol::Basic::Deliver, Protocol::Basic::GetOk
-          @method = method
-          @header = nil
-          @body   = ''
-
-        when Protocol::Basic::GetEmpty
-          block.call(nil) if block
-
-        when Protocol::Channel::Close
-          raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
-
-        when Protocol::Channel::CloseOk
-          kill
-        end
+    def read(*args)
+      with_socket do |socket|
+        socket.read(*args)
       end
     end
-  
-    def log(*args)
-      return unless Carrot.log?
-      require 'pp'
-      pp args
-      puts
+
+    def write(*args)
+      with_socket do |socket|
+        socket.write(*args)
+      end
     end
 
-    def send_command(data, &block)
+    def with_socket(&block)
       retried = false
       begin
         mutex.lock if multithread?
-        command = command.join("\r\n") if command.kind_of?(Array)
-        socket.write("#{command}")
-        response = socket.gets
-        
-        unexpected_eof! if response.nil?
-        if response =~ /^(ERROR|CLIENT_ERROR|SERVER_ERROR) (.*)\r\n/
-          raise ($1 == 'SERVER_ERROR' ? ServerError : ClientError), $2
-        end
-
-        process_frame(&block)
+        yield socket
 
       rescue ClientError, ServerError, SocketError, SystemCallError, IOError => error
         if not retried
@@ -129,6 +95,91 @@ class Carrot
       end
     end
 
+    def receive_frame(&block)
+      frame = Frame.get(self)
+      return unless frame
+
+      log :received, frame
+
+      case frame
+      when Frame::Header
+        @header = frame.payload
+        @body = ''
+
+      when Frame::Body
+        @body << frame.payload
+        if @body.length >= @header.size
+          @header.properties.update(@method.arguments)
+          block.call(@header, @body) if block
+          @body = @header = @consumer = @method = nil
+        end
+
+      when Frame::Method
+        case method = frame.payload
+        when Protocol::Connection::Start
+          send_command(
+            Protocol::Connection::StartOk.new(
+              {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => VERSION},
+              'AMQPLAIN',
+              {:LOGIN => @user, :PASSWORD => @pass},
+              'en_US'
+            )
+          )
+          receive_frame
+
+        when Protocol::Connection::Tune
+          send_command(
+            Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
+          )
+          send_command(
+            Protocol::Connection::Open.new(:virtual_host => @vhost, :capabilities => '', :insist => @insist)
+          )
+          receive_frame
+
+        when Protocol::Connection::Close
+          STDERR.puts "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]}"
+
+        when Protocol::Connection::OpenOk
+          #send_command(
+          #  Protocol::Access::Request.new
+          #)
+          #receive_frame
+
+        when Protocol::Channel::OpenOk
+          send_command(
+            Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
+          )
+          receive_frame
+
+        when Protocol::Access::RequestOk
+          pp :ticket, @ticket
+          @ticket = method.ticket
+          block.call(method) if block
+
+        when Protocol::Queue::DeclareOk
+          block.call(method) if block
+
+        when Protocol::Basic::CancelOk, Protocol::Connection::CloseOk
+          block.call if block
+
+        when Protocol::Basic::Deliver, Protocol::Basic::GetOk
+          @method = method
+          @header = nil
+          @body   = ''
+
+        when Protocol::Basic::GetEmpty
+          block.call(nil) if block
+
+        when Protocol::Channel::Close
+          raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
+
+        when Protocol::Channel::CloseOk
+          kill
+        end
+      end
+    end
+
+  private
     def socket
       return @socket if @socket and not @socket.closed?
       raise ServerDown, "will retry at #{retry_at}" unless retry?
@@ -160,6 +211,17 @@ class Carrot
       raise ConnectionError, 'unexpected end of file' 
     end
 
+    def close
+      # Close the socket. The server is not considered dead.
+      mutex.lock if multithread?
+      @socket.close if @socket and not @socket.closed?
+      @socket   = nil
+      @retry_at = nil
+      @status   = "NOT CONNECTED"
+    ensure
+      mutex.unlock if multithread?
+    end
+
     def kill(reason = 'Unknown error')
       send(
         Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0),
@@ -169,7 +231,6 @@ class Carrot
           )
         }
       )
-
       # Mark the server as dead and close its socket.
       @socket.close if @socket and not @socket.closed?
       @socket   = nil
@@ -180,5 +241,15 @@ class Carrot
     def mutex
       @mutex ||= Mutex.new
     end
+
+    def log(*args)
+      #--------------------------------------------------
+      # return unless Carrot.logging?
+      #-------------------------------------------------- 
+      require 'pp'
+      pp args
+      puts
+    end
+
   end
 end

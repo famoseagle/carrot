@@ -1,48 +1,25 @@
-class Carrot
+module AMQP
   class Queue
-    
+
     def initialize(server, name, opts = {})
       @server     = server
       @opts       = opts
       @bindings ||= {}
-      @server.send(
+      @server.send_command(
         Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
       )
     end
     attr_reader :name
 
-    def bind(exchange, opts = {})
-      exchange = exchange.respond_to?(:name) ? exchange.name : exchange
-      @bindings[exchange] = opts
-
-      @server.send(
-        Protocol::Queue::Bind.new(
-          { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
-        )
-      )
-      self
-    end
-
-    def unbind(exchange, opts = {})
-      exchange = exchange.respond_to?(:name) ? exchange.name : exchange
-      @bindings.delete(exchange)
-      @server.send(
-        Protocol::Queue::Unbind.new(
-          { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
-        )
-      )
-      self
-    end
-
     def delete(opts = {})
-      @server.send(
+      @server.send_command(
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
       nil
     end
 
     def pop(opts = {}, &blk)
-      @server.send(
+      @server.send_command(
         Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)),
         &blk
       )
@@ -53,58 +30,73 @@ class Carrot
       exchange.publish(data, opts)
     end
     
-    def subscribed?
-      !!@on_msg
-    end
-
-    def receive(headers, body)
-      headers = MQ::Header.new(@server, headers)
-
-      if cb = (@on_msg || @on_pop)
-        cb.call *(cb.arity == 1 ? [body] : [headers, body])
-      end
-    end
-
     def status(opts = {}, &blk)
-      @on_status = blk
-      @server.send(Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts)))
-      self
-    end
-
-    def recieve_status(declare_ok)
-      if @on_status
-        m, c = declare_ok.message_count, declare_ok.consumer_count
-        @on_status.call *(@on_status.arity == 1 ? [m] : [m, c])
-        @on_status = nil
+      message_count, consumer_count = 0
+      @server.send_command(Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts))) do |status|
+        message_count  = status.message_count
+        consumer_count = status.consumer_count
       end
+      [message_count, consumer_count]
     end
 
-    def cancelled
-      @on_cancel.call if @on_cancel
-      @on_cancel = @on_msg = nil
-      @server.consumers.delete @consumer_tag
-      @consumer_tag = nil
-    end
-
-    def reset
-      @deferred_status = nil
-      initialize @server, @name, @opts
-
-      binds = @bindings
-      @bindings = {}
-      binds.each{|ex,opts| bind(ex, opts) }
-
-      if blk = @on_msg
-        @on_msg = nil
-        subscribe(@on_msg_opts, &blk)
-      end
-
-      if @on_pop
-        pop(@on_pop_opts, &@on_pop)
-      end
-    end
-  
     #--------------------------------------------------
+    # def bind(exchange, opts = {})
+    #   exchange = exchange.respond_to?(:name) ? exchange.name : exchange
+    #   @bindings[exchange] = opts
+    # 
+    #   @server.send(
+    #     Protocol::Queue::Bind.new(
+    #       { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
+    #     )
+    #   )
+    #   self
+    # end
+    # 
+    # def unbind(exchange, opts = {})
+    #   exchange = exchange.respond_to?(:name) ? exchange.name : exchange
+    #   @bindings.delete(exchange)
+    #   @server.send(
+    #     Protocol::Queue::Unbind.new(
+    #       { :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
+    #     )
+    #   )
+    #   self
+    # end
+    #-------------------------------------------------- 
+
+    #--------------------------------------------------
+    # def recieve_status(declare_ok)
+    #   if @on_status
+    #     m, c = declare_ok.message_count, declare_ok.consumer_count
+    #     @on_status.call *(@on_status.arity == 1 ? [m] : [m, c])
+    #     @on_status = nil
+    #   end
+    # end
+    # 
+    # def reset
+    #   @deferred_status = nil
+    #   initialize @server, @name, @opts
+    # 
+    #   binds = @bindings
+    #   @bindings = {}
+    #   binds.each{|ex,opts| bind(ex, opts) }
+    # 
+    #   if blk = @on_msg
+    #     @on_msg = nil
+    #     subscribe(@on_msg_opts, &blk)
+    #   end
+    # 
+    #   if @on_pop
+    #     pop(@on_pop_opts, &@on_pop)
+    #   end
+    # end
+    # 
+    # def subscribed?
+    #   !!@on_msg
+    # end
+    #-------------------------------------------------- 
+
+    #-------------------------------------------------- 
     # def subscribe(opts = {}, &blk)
     #   @consumer_tag = "#{name}-#{Kernel.rand(999_999_999_999)}"
     #   @server.consumers[@consumer_tag] = self

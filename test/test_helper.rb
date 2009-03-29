@@ -1,10 +1,18 @@
 require 'rubygems'
 require 'test/unit'
-require 'shoulda'
+#require 'shoulda'
 require 'mocha'
+require File.dirname(__FILE__) + '/../lib/carrot'
 
-$LOAD_PATH.unshift(File.dirname(__FILE__))
-require 'carrot'
+class << Test::Unit::TestCase
+  def test(name, &block)
+    test_name = "test_#{name.gsub(/[\s\W]/,'_')}"
+    raise ArgumentError, "#{test_name} is already defined" if self.instance_methods.include? test_name
+    define_method test_name, &block
+  end
 
-class Test::Unit::TestCase
+  def xtest(name, &block)
+    # no-op, an empty test method is defined to prevent "no tests in testcase" errors when all tests are disabled
+    define_method(:test_disabled) { assert true }
+  end
 end

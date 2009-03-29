@@ -1,23 +1,29 @@
-require 'carrot/exchange'
-require 'carrot/queue'
-require 'carrot/header'
+$:.unshift File.expand_path(File.dirname(File.expand_path(__FILE__)))
+require 'amqp/spec'
+require 'amqp/buffer'
+require 'amqp/exchange'
+require 'amqp/frame'
+require 'amqp/header'
+require 'amqp/queue'
+require 'amqp/server'
+require 'amqp/protocol'
 
 class Carrot
+  @logging = false
   class << self
-    @logging = false
     attr_accessor :logging
   end
+  def self.logging?
+    @logging
+  end
   class Error < StandardError; end
-end
 
-class Carrot
-
-  def initialize(opts)
-    @server = Server.new(opts)
+  def initialize(opts = {})
+    @server = AMQP::Server.new(opts)
   end
   
   def queue(name, opts = {})
-    queues[name] ||= Queue.new(self, name, opts)
+    queues[name] ||= AMQP::Queue.new(@server, name, opts)
   end
 
   def close
@@ -28,10 +34,18 @@ class Carrot
     @queues ||= {}
   end
 
+  def send_data(data)
+    @server.send_data(data)
+  end
+
+  def send_command(cmd)
+    @server.send_command(cmd)
+  end
+
 private
 
-  def log *args
-    return unless MQ.logging
+  def log(*args)
+    return unless Carrot.logging?
     pp args
     puts
   end

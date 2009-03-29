@@ -1,7 +1,3 @@
-require 'amqp/spec'
-require 'amqp/buffer'
-require 'amqp/protocol'
-
 module AMQP
   class Frame #:nodoc: all
     def initialize payload = nil, channel = 0
@@ -61,6 +57,15 @@ module AMQP
         id, channel, payload, footer = buf.read(:octet, :short, :longstr, :octet)
         Frame.types[id].new(payload, channel) if footer == FOOTER
       end
+    end
+
+    def self.get(server)
+      id      = server.read(1).unpack('C').first
+      channel = server.read(2).unpack('n').first
+      size    = server.read(4).unpack('N').first
+      data    = server.read(size)
+      footer  = server.read(1).unpack('C').first
+      Frame.types[id].new(data, channel) if footer == FOOTER
     end
   end
 end
