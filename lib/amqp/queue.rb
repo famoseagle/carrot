@@ -1,15 +1,15 @@
 module AMQP
   class Queue
+    attr_reader :name
 
     def initialize(server, name, opts = {})
-      @server     = server
-      @opts       = opts
-      @bindings ||= {}
+      @server = server
+      @opts   = opts
+      @name   = name
       @server.send_command(
         Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
       )
     end
-    attr_reader :name
 
     def delete(opts = {})
       @server.send_command(
@@ -62,17 +62,7 @@ module AMQP
     #   )
     #   self
     # end
-    #-------------------------------------------------- 
-
-    #--------------------------------------------------
-    # def recieve_status(declare_ok)
-    #   if @on_status
-    #     m, c = declare_ok.message_count, declare_ok.consumer_count
-    #     @on_status.call *(@on_status.arity == 1 ? [m] : [m, c])
-    #     @on_status = nil
-    #   end
-    # end
-    # 
+    #
     # def reset
     #   @deferred_status = nil
     #   initialize @server, @name, @opts
@@ -94,9 +84,7 @@ module AMQP
     # def subscribed?
     #   !!@on_msg
     # end
-    #-------------------------------------------------- 
-
-    #-------------------------------------------------- 
+    #
     # def subscribe(opts = {}, &blk)
     #   @consumer_tag = "#{name}-#{Kernel.rand(999_999_999_999)}"
     #   @server.consumers[@consumer_tag] = self

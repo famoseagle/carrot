@@ -9,7 +9,7 @@ module AMQP
     DEFAULT_PORT    = 5672
 
     attr_reader   :host, :port, :status
-    attr_accessor :retry_at
+    attr_accessor :retry_at, :channel, :ticket
 
     class Error           < StandardError; end
     class ConnectionError < Error; end
@@ -24,6 +24,7 @@ module AMQP
       @pass   = opts[:pass]  || 'guest'
       @vhost  = opts[:vhost] || '/'
       @insist = opts[:insist]
+      @channel= 0
       @status = 'NOT CONNECTED'
 
       @multithread = opts[:multithread]      
@@ -31,8 +32,6 @@ module AMQP
       write(HEADER)
       write([1, 1, VERSION_MAJOR, VERSION_MINOR].pack('C4'))
       receive_frame
-      #send_command(Protocol::Channel::Open.new)
-      #receive_frame
     end
 
     def multithread?
@@ -45,9 +44,7 @@ module AMQP
 
     def send_command(*args, &block)
       args.each do |data|
-        #data.ticket  = @ticket if data.respond_to?(:ticket=)
-        data.ticket  = 0 if data.respond_to?(:ticket=)
-        channel      = 0
+        data.ticket  = ticket if ticket and data.respond_to?(:ticket=)
         data         = data.to_frame(channel) unless data.is_a?(Frame)
         data.channel = channel
 
@@ -140,10 +137,9 @@ module AMQP
           STDERR.puts "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]}"
 
         when Protocol::Connection::OpenOk
-          #send_command(
-          #  Protocol::Access::Request.new
-          #)
-          #receive_frame
+          self.channel = 1
+          send_command(Protocol::Channel::Open.new)
+          receive_frame
 
         when Protocol::Channel::OpenOk
           send_command(
@@ -152,8 +148,7 @@ module AMQP
           receive_frame
 
         when Protocol::Access::RequestOk
-          pp :ticket, @ticket
-          @ticket = method.ticket
+          self.ticket = method.ticket
           block.call(method) if block
 
         when Protocol::Queue::DeclareOk
