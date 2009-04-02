@@ -26,7 +26,7 @@ class Carrot
     queues[name] ||= AMQP::Queue.new(@server, name, opts)
   end
 
-  def close
+  def stop
     @server.close
   end
 

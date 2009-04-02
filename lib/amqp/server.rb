@@ -62,6 +62,7 @@ module AMQP
 
     def write(*args)
       with_socket do |socket|
+        pp args
         socket.write(*args)
       end
     end
@@ -75,12 +76,12 @@ module AMQP
       rescue ClientError, ServerError, SocketError, SystemCallError, IOError => error
         if not retried
           # Close the socket and retry once.
-          close
+          close_socket
           retried = true
           retry
         else
           # Mark the server dead and raise an error.
-          kill(error.message)
+          close(error.message)
 
           # Reraise as a ConnectionError
           new_error = ConnectionError.new("#{error.class}: #{error.message}")
@@ -155,7 +156,6 @@ module AMQP
           block.call(method) if block
 
         when Protocol::Basic::CancelOk, Protocol::Connection::CloseOk
-          block.call if block
 
         when Protocol::Basic::Deliver, Protocol::Basic::GetOk
           @method = method
@@ -169,9 +169,20 @@ module AMQP
           raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
 
         when Protocol::Channel::CloseOk
-          kill
+          close_socket
         end
       end
+    end
+
+    def close
+      send_command(
+        Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
+      )
+      receive_frame
+      self.channel = 0
+      send_command(
+        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
+      )
     end
 
   private
@@ -192,8 +203,7 @@ module AMQP
         @retry_at = nil
         @status   = 'CONNECTED'
       rescue SocketError, SystemCallError, IOError, Timeout::Error => e
-        # Connection failed.
-        kill(e.message)
+        close_socket
         raise ServerDown, e.message
       ensure
         mutex.unlock if multithread?
@@ -206,7 +216,7 @@ module AMQP
       raise ConnectionError, 'unexpected end of file' 
     end
 
-    def close
+    def close_socket(reason=nil)
       # Close the socket. The server is not considered dead.
       mutex.lock if multithread?
       @socket.close if @socket and not @socket.closed?
@@ -215,22 +225,6 @@ module AMQP
       @status   = "NOT CONNECTED"
     ensure
       mutex.unlock if multithread?
-    end
-
-    def kill(reason = 'Unknown error')
-      send(
-        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0),
-        Proc.new{
-          send(
-            Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
-          )
-        }
-      )
-      # Mark the server as dead and close its socket.
-      @socket.close if @socket and not @socket.closed?
-      @socket   = nil
-      @retry_at = Time.now + RETRY_DELAY  
-      @status   = "DEAD: %s, will retry at %s" % [reason, @retry_at]
     end
 
     def mutex
