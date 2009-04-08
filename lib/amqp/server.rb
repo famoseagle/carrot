@@ -11,11 +11,11 @@ module AMQP
     attr_reader   :host, :port, :status
     attr_accessor :retry_at, :channel, :ticket
 
-    class Error           < StandardError; end
-    class ConnectionError < Error; end
-    class ServerError     < Error; end
-    class ClientError     < Error; end
-    class ServerDown      < Error; end
+    class ConnectionError < StandardError; end
+    class ServerError     < StandardError; end
+    class ClientError     < StandardError; end
+    class ServerDown      < StandardError; end
+    class ProtocolError   < StandardError; end
 
     def initialize(opts = {})
       @host   = opts[:host]  || 'localhost'
@@ -24,22 +24,48 @@ module AMQP
       @pass   = opts[:pass]  || 'guest'
       @vhost  = opts[:vhost] || '/'
       @insist = opts[:insist]
-      @channel= 0
       @status = 'NOT CONNECTED'
 
       @multithread = opts[:multithread]      
+      start_session
+    end
 
+    def start_session
+      @channel = 0
       write(HEADER)
       write([1, 1, VERSION_MAJOR, VERSION_MINOR].pack('C4'))
-      receive_frame
-    end
+      raise ProtocolError, 'bad start connection' unless next_method.is_a?(Protocol::Connection::Start)
 
-    def multithread?
-      @multithread
-    end
+      send_frame(
+        Protocol::Connection::StartOk.new(
+          {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => VERSION},
+          'AMQPLAIN',
+          {:LOGIN => @user, :PASSWORD => @pass},
+          'en_US'
+        )
+      )
 
-    def retry?
-      @retry_at.nil? or @retry_at < Time.now
+      if next_method.is_a?(Protocol::Connection::Tune)
+        send_frame(
+          Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
+        )
+      end
+
+      send_frame(
+        Protocol::Connection::Open.new(:virtual_host => @vhost, :capabilities => '', :insist => @insist)
+      )
+      raise ProtocolError, 'bad open connection' unless next_method.is_a?(Protocol::Connection::OpenOk)
+
+      @channel = 1
+      send_frame(Protocol::Channel::Open.new)
+      raise ProtocolError, "cannot open channel #{channel}" unless next_method.is_a?(Protocol::Channel::OpenOk)
+
+      send_frame(
+        Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
+      )
+      method = next_method
+      raise ProtocolError, 'access denied' unless method.is_a?(Protocol::Access::RequestOk)
+      self.ticket = method.ticket
     end
 
     def send_frame(*args)
@@ -53,19 +79,50 @@ module AMQP
       end
     end
 
+    def next_frame
+      frame = Frame.get(self)
+      log :received, frame
+      frame
+    end
+
+    def next_method
+      next_payload
+    end
+
+    def next_payload
+      next_frame.payload
+    end
+
+    def close
+      send_frame(
+        Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
+      )
+      puts "Error closing channel #{channel}" unless next_method.is_a?(Protocol::Channel::CloseOk)
+
+      self.channel = 0
+      send_frame(
+        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
+      )
+      puts "Error closing connection" unless next_method.is_a?(Protocol::Connection::CloseOk)
+
+      close_socket
+    end
+
     def read(*args)
-      with_socket do |socket|
+      with_socket_management do |socket|
         socket.read(*args)
       end
     end
 
     def write(*args)
-      with_socket do |socket|
+      with_socket_management do |socket|
         socket.write(*args)
       end
     end
 
-    def with_socket(&block)
+  private
+
+    def with_socket_management(&block)
       retried = false
       begin
         mutex.lock if multithread?
@@ -75,6 +132,7 @@ module AMQP
         if not retried
           # Close the socket and retry once.
           close_socket
+          #start_session
           retried = true
           retry
         else
@@ -90,92 +148,6 @@ module AMQP
         mutex.unlock if multithread?
       end
     end
-
-    def next_frame
-      frame = Frame.get(self)
-      log :received, frame
-      frame
-    end
-
-    def receive_frame
-      frame = next_frame
-      return unless frame
-
-      case frame
-      when Frame::Header
-        @header = frame.payload
-        @body = ''
-        receive_frame
-
-      when Frame::Body
-        @body << frame.payload
-        if @body.length >= @header.size
-          @header.properties.update(@method.arguments)
-          @body = @header = @consumer = @method = nil
-        end
-
-      when Frame::Method
-        case method = frame.payload
-        when Protocol::Connection::Start
-          send_frame(
-            Protocol::Connection::StartOk.new(
-              {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => VERSION},
-              'AMQPLAIN',
-              {:LOGIN => @user, :PASSWORD => @pass},
-              'en_US'
-            )
-          )
-          receive_frame
-
-        when Protocol::Connection::Tune
-          send_frame(
-            Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
-          )
-          send_frame(
-            Protocol::Connection::Open.new(:virtual_host => @vhost, :capabilities => '', :insist => @insist)
-          )
-          receive_frame
-
-        when Protocol::Connection::Close
-          STDERR.puts "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]}"
-
-        when Protocol::Connection::OpenOk
-          self.channel = 1
-          send_frame(Protocol::Channel::Open.new)
-          receive_frame
-
-        when Protocol::Channel::OpenOk
-          send_frame(
-            Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
-          )
-          receive_frame
-
-        when Protocol::Access::RequestOk
-          self.ticket = method.ticket
-
-        when Protocol::Basic::CancelOk, Protocol::Queue::DeclareOk
-
-        when Protocol::Channel::Close
-          raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
-
-        end
-      end
-    end
-
-    def close
-      send_frame(
-        Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
-      )
-      next_frame
-      self.channel = 0
-      send_frame(
-        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
-      )
-      next_frame
-      close_socket
-    end
-
-  private
 
     def socket
       return @socket if @socket and not @socket.closed?
@@ -201,6 +173,14 @@ module AMQP
       end
 
       @socket
+    end
+
+    def multithread?
+      @multithread
+    end
+
+    def retry?
+      @retry_at.nil? or @retry_at < Time.now
     end
 
     def unexpected_eof!

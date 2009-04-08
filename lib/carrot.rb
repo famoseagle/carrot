@@ -18,6 +18,18 @@ class Carrot
   end
   class Error < StandardError; end
 
+  def self.queue(name, opts = {})
+    instance(opts).queue(name, opts)
+  end
+
+  def self.stop
+    instance.stop
+  end
+
+  def self.instance(opts = {})
+    @instance ||= new(opts)
+  end
+
   def initialize(opts = {})
     @server = AMQP::Server.new(opts)
   end
