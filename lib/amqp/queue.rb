@@ -29,6 +29,14 @@ module AMQP
     def publish(data, opts = {})
       exchange.publish(data, opts)
     end
+
+    def message_count
+      status.first
+    end
+
+    def consumer_count
+      status.last
+    end
     
     def status(opts = {}, &blk)
       message_count, consumer_count = 0

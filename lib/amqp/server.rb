@@ -62,7 +62,6 @@ module AMQP
 
     def write(*args)
       with_socket do |socket|
-        pp args
         socket.write(*args)
       end
     end
@@ -155,7 +154,7 @@ module AMQP
         when Protocol::Queue::DeclareOk
           block.call(method) if block
 
-        when Protocol::Basic::CancelOk, Protocol::Connection::CloseOk
+        when Protocol::Basic::CancelOk, Protocol::Connection::CloseOk, Protocol::Channel::CloseOk
 
         when Protocol::Basic::Deliver, Protocol::Basic::GetOk
           @method = method
@@ -168,8 +167,6 @@ module AMQP
         when Protocol::Channel::Close
           raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
 
-        when Protocol::Channel::CloseOk
-          close_socket
         end
       end
     end
@@ -183,9 +180,12 @@ module AMQP
       send_command(
         Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
       )
+      receive_frame
+      close_socket
     end
 
   private
+
     def socket
       return @socket if @socket and not @socket.closed?
       raise ServerDown, "will retry at #{retry_at}" unless retry?
@@ -232,9 +232,7 @@ module AMQP
     end
 
     def log(*args)
-      #--------------------------------------------------
-      # return unless Carrot.logging?
-      #-------------------------------------------------- 
+      return unless Carrot.logging?
       require 'pp'
       pp args
       puts
