@@ -42,7 +42,7 @@ module AMQP
       @retry_at.nil? or @retry_at < Time.now
     end
 
-    def send_command(*args)
+    def send_frame(*args)
       args.each do |data|
         data.ticket  = ticket if ticket and data.respond_to?(:ticket=)
         data         = data.to_frame(channel) unless data.is_a?(Frame)
@@ -91,30 +91,33 @@ module AMQP
       end
     end
 
-    def receive_frame(&block)
+    def next_frame
       frame = Frame.get(self)
-      return unless frame
-
       log :received, frame
+      frame
+    end
+
+    def receive_frame
+      frame = next_frame
+      return unless frame
 
       case frame
       when Frame::Header
         @header = frame.payload
         @body = ''
-        receive_frame(&block)
+        receive_frame
 
       when Frame::Body
         @body << frame.payload
         if @body.length >= @header.size
           @header.properties.update(@method.arguments)
-          block.call(@header, @body) if block
           @body = @header = @consumer = @method = nil
         end
 
       when Frame::Method
         case method = frame.payload
         when Protocol::Connection::Start
-          send_command(
+          send_frame(
             Protocol::Connection::StartOk.new(
               {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => VERSION},
               'AMQPLAIN',
@@ -125,10 +128,10 @@ module AMQP
           receive_frame
 
         when Protocol::Connection::Tune
-          send_command(
+          send_frame(
             Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
           )
-          send_command(
+          send_frame(
             Protocol::Connection::Open.new(:virtual_host => @vhost, :capabilities => '', :insist => @insist)
           )
           receive_frame
@@ -138,32 +141,19 @@ module AMQP
 
         when Protocol::Connection::OpenOk
           self.channel = 1
-          send_command(Protocol::Channel::Open.new)
+          send_frame(Protocol::Channel::Open.new)
           receive_frame
 
         when Protocol::Channel::OpenOk
-          send_command(
+          send_frame(
             Protocol::Access::Request.new(:realm => '/data', :read => true, :write => true, :active => true, :passive => true)
           )
           receive_frame
 
         when Protocol::Access::RequestOk
           self.ticket = method.ticket
-          block.call(method) if block
 
-        when Protocol::Queue::DeclareOk
-          block.call(method) if block
-
-        when Protocol::Basic::CancelOk, Protocol::Connection::CloseOk, Protocol::Channel::CloseOk
-
-        when Protocol::Basic::Deliver, Protocol::Basic::GetOk
-          @method = method
-          @header = nil
-          @body   = ''
-          receive_frame(&block)
-
-        when Protocol::Basic::GetEmpty
-          block.call(nil) if block
+        when Protocol::Basic::CancelOk, Protocol::Queue::DeclareOk
 
         when Protocol::Channel::Close
           raise Error, "#{method.reply_text} in #{Protocol.classes[method.class_id].methods[method.method_id]} on #{@channel}"
@@ -173,15 +163,15 @@ module AMQP
     end
 
     def close
-      send_command(
+      send_frame(
         Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
       )
-      receive_frame
+      next_frame
       self.channel = 0
-      send_command(
+      send_frame(
         Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
       )
-      receive_frame
+      next_frame
       close_socket
     end
 

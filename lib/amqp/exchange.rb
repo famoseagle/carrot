@@ -6,7 +6,7 @@ module AMQP
       @key = opts[:key]
 
       unless name == "amq.#{type}" or name == ''
-        @server.send_command(
+        @server.send_frame(
           Protocol::Exchange::Declare.new(
             { :exchange => name, :type => type, :nowait => true }.merge(opts)
           )
@@ -32,13 +32,11 @@ module AMQP
       )
       out << Frame::Body.new(data)
 
-      @server.send_command(*out)
-      self
+      @server.send_frame(*out)
     end
 
     def delete(opts = {})
-      @server.send_command(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
-      nil
+      @server.send_frame(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
     end
 
     def reset
