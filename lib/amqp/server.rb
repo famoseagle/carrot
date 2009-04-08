@@ -42,7 +42,7 @@ module AMQP
       @retry_at.nil? or @retry_at < Time.now
     end
 
-    def send_command(*args, &block)
+    def send_command(*args)
       args.each do |data|
         data.ticket  = ticket if ticket and data.respond_to?(:ticket=)
         data         = data.to_frame(channel) unless data.is_a?(Frame)
@@ -50,7 +50,6 @@ module AMQP
 
         log :send, data
         write(data.to_s)
-        receive_frame(&block) if block
       end
     end
 
@@ -102,6 +101,7 @@ module AMQP
       when Frame::Header
         @header = frame.payload
         @body = ''
+        receive_frame(&block)
 
       when Frame::Body
         @body << frame.payload
@@ -160,6 +160,7 @@ module AMQP
           @method = method
           @header = nil
           @body   = ''
+          receive_frame(&block)
 
         when Protocol::Basic::GetEmpty
           block.call(nil) if block

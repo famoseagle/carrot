@@ -15,15 +15,13 @@ module AMQP
       @server.send_command(
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
-      nil
     end
 
     def pop(opts = {}, &blk)
       @server.send_command(
-        Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts)),
-        &blk
+        Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts))
       )
-      self
+      @server.receive_frame(&blk)
     end
 
     def publish(data, opts = {})
