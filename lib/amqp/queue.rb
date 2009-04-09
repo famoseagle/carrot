@@ -10,13 +10,14 @@ module AMQP
       server.send_frame(
         Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
       )
+      nil
     end
 
     def delete(opts = {})
       server.send_frame(
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
-      pp server.next_method
+      nil
     end
 
     def pop(opts = {})
