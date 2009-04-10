@@ -51,21 +51,12 @@ module Carrot::AMQP
 
     class Body; end
 
-    def self.parse buf
+    def self.parse(buf)
       buf = Buffer.new(buf) unless buf.is_a? Buffer
       buf.extract do
         id, channel, payload, footer = buf.read(:octet, :short, :longstr, :octet)
         Frame.types[id].new(payload, channel) if footer == FOOTER
       end
-    end
-
-    def self.get(server)
-      id      = server.read(1).unpack('C').first
-      channel = server.read(2).unpack('n').first
-      size    = server.read(4).unpack('N').first
-      data    = server.read(size)
-      footer  = server.read(1).unpack('C').first
-      Frame.types[id].new(data, channel) if footer == FOOTER
     end
   end
 end

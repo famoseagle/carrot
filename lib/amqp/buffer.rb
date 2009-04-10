@@ -247,7 +247,13 @@ module Carrot::AMQP
       end
     end
 
-    def _read size, pack = nil
+    def _read(size, pack = nil)
+      if @data.is_a?(Server)
+        raw = @data.read(size)
+        return raw if raw.nil? or pack.nil? 
+        return raw.unpack(pack).first
+      end
+
       if @pos + size > length
         raise Overflow
       else

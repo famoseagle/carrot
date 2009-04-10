@@ -9,7 +9,7 @@ module Carrot::AMQP
     DEFAULT_PORT    = 5672
 
     attr_reader   :host, :port, :status
-    attr_accessor :retry_at, :channel, :ticket
+    attr_accessor :channel, :ticket
 
     class ConnectionError < StandardError; end
     class ServerError     < StandardError; end
@@ -28,6 +28,85 @@ module Carrot::AMQP
 
       @multithread = opts[:multithread]      
       start_session
+    end
+
+    def send_frame(*args)
+      args.each do |data|
+        data.ticket  = ticket if ticket and data.respond_to?(:ticket=)
+        data         = data.to_frame(channel) unless data.is_a?(Frame)
+        data.channel = channel
+
+        log :send, data
+        write(data.to_s)
+      end
+    end
+
+    def next_frame
+      frame = Frame.parse(buffer)
+      log :received, frame
+      frame
+    end
+
+    def next_method
+      next_payload
+    end
+
+    def next_payload
+      frame = next_frame
+      frame and frame.payload
+    end
+
+    def close
+      send_frame(
+        Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
+      )
+      puts "Error closing channel #{channel}" unless next_method.is_a?(Protocol::Channel::CloseOk)
+
+      self.channel = 0
+      send_frame(
+        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
+      )
+      puts "Error closing connection" unless next_method.is_a?(Protocol::Connection::CloseOk)
+
+      close_socket
+    end
+
+    def read(*args)
+      socket.read(*args)
+    end
+
+    def write(*args)
+      socket.write(*args)
+    end
+
+  private
+
+    def buffer
+      @buffer ||= Buffer.new(self)
+    end
+
+    def socket
+      return @socket if @socket and not @socket.closed?
+
+      begin
+        # Attempt to connect.
+        mutex.lock if multithread?
+        @socket = timeout(CONNECT_TIMEOUT) do
+          TCPSocket.new(host, port)
+        end
+
+        if Socket.constants.include? 'TCP_NODELAY'
+          @socket.setsockopt Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1
+        end
+        @status   = 'CONNECTED'
+      rescue SocketError, SystemCallError, IOError, Timeout::Error => e
+        kill(e.message)
+        raise ServerDown, e.message
+      ensure
+        mutex.unlock if multithread?
+      end
+
+      @socket
     end
 
     def start_session
@@ -68,123 +147,8 @@ module Carrot::AMQP
       self.ticket = method.ticket
     end
 
-    def send_frame(*args)
-      args.each do |data|
-        data.ticket  = ticket if ticket and data.respond_to?(:ticket=)
-        data         = data.to_frame(channel) unless data.is_a?(Frame)
-        data.channel = channel
-
-        log :send, data
-        write(data.to_s)
-      end
-    end
-
-    def next_frame
-      frame = Frame.get(self)
-      log :received, frame
-      frame
-    end
-
-    def next_method
-      next_payload
-    end
-
-    def next_payload
-      next_frame.payload
-    end
-
-    def close
-      send_frame(
-        Protocol::Channel::Close.new(:reply_code => 200, :reply_text => 'bye', :method_id => 0, :class_id => 0)
-      )
-      puts "Error closing channel #{channel}" unless next_method.is_a?(Protocol::Channel::CloseOk)
-
-      self.channel = 0
-      send_frame(
-        Protocol::Connection::Close.new(:reply_code => 200, :reply_text => 'Goodbye', :class_id => 0, :method_id => 0)
-      )
-      puts "Error closing connection" unless next_method.is_a?(Protocol::Connection::CloseOk)
-
-      close_socket
-    end
-
-    def read(*args)
-      with_socket_management do |socket|
-        socket.read(*args)
-      end
-    end
-
-    def write(*args)
-      with_socket_management do |socket|
-        socket.write(*args)
-      end
-    end
-
-  private
-
-    def with_socket_management(&block)
-      retried = false
-      begin
-        mutex.lock if multithread?
-        yield socket
-
-      rescue ClientError, ServerError, SocketError, SystemCallError, IOError => error
-        if not retried
-          # Close the socket and retry once.
-          close_socket
-          #start_session
-          retried = true
-          retry
-        else
-          # Mark the server dead and raise an error.
-          close(error.message)
-
-          # Reraise as a ConnectionError
-          new_error = ConnectionError.new("#{error.class}: #{error.message}")
-          new_error.set_backtrace(error.backtrace)
-          raise new_error
-        end
-      ensure
-        mutex.unlock if multithread?
-      end
-    end
-
-    def socket
-      return @socket if @socket and not @socket.closed?
-      raise ServerDown, "will retry at #{retry_at}" unless retry?
-
-      begin
-        # Attempt to connect.
-        mutex.lock if multithread?
-        @socket = timeout(CONNECT_TIMEOUT) do
-          TCPSocket.new(host, port)
-        end
-
-        if Socket.constants.include? 'TCP_NODELAY'
-          @socket.setsockopt Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1
-        end
-        @retry_at = nil
-        @status   = 'CONNECTED'
-      rescue SocketError, SystemCallError, IOError, Timeout::Error => e
-        close_socket
-        raise ServerDown, e.message
-      ensure
-        mutex.unlock if multithread?
-      end
-
-      @socket
-    end
-
     def multithread?
       @multithread
-    end
-
-    def retry?
-      @retry_at.nil? or @retry_at < Time.now
-    end
-
-    def unexpected_eof!
-      raise ConnectionError, 'unexpected end of file' 
     end
 
     def close_socket(reason=nil)
@@ -192,7 +156,6 @@ module Carrot::AMQP
       mutex.lock if multithread?
       @socket.close if @socket and not @socket.closed?
       @socket   = nil
-      @retry_at = nil
       @status   = "NOT CONNECTED"
     ensure
       mutex.unlock if multithread?
