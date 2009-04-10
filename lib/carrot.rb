@@ -27,40 +27,38 @@ class Carrot
   end
   class Error < StandardError; end
 
-  def self.queue(name, opts = {})
-    instance(opts).queue(name, opts)
-  end
-
-  def self.stop
-    instance.stop
-  end
-
-  def self.instance(opts = {})
-    @instance ||= new(opts)
-  end
+  attr_accessor :server
 
   def initialize(opts = {})
     @server = AMQP::Server.new(opts)
   end
   
   def queue(name, opts = {})
-    queues[name] ||= AMQP::Queue.new(@server, name, opts)
+    queues[name] ||= AMQP::Queue.new(server, name, opts)
   end
 
   def stop
-    @server.close
+    server.close
   end
 
   def queues
     @queues ||= {}
   end
 
-  def send_data(data)
-    @server.send_data(data)
+  def direct(name = 'amq.direct', opts = {})
+    exchanges[name] ||= Exchange.new(server, :direct, name, opts)
   end
 
-  def send_command(cmd)
-    @server.send_command(cmd)
+  def topic(name = 'amq.topic', opts = {})
+    exchanges[name] ||= Exchange.new(server, :topic, name, opts)
+  end
+
+  def headers(name = 'amq.match', opts = {})
+    exchanges[name] ||= Exchange.new(server, :headers, name, opts)
+  end
+
+  def exchanges
+    @exchanges ||= {}
   end
 
 private
@@ -70,4 +68,20 @@ private
     pp args
     puts
   end
+end
+
+#-- convenience wrapper (read: HACK) for thread-local Carrot object
+
+class Carrot
+  def Carrot.default
+    #-- XXX clear this when connection is closed
+    Thread.current[:carrot] ||= Carrot.new
+  end
+
+  # Allows for calls to all Carrot instance methods. This implicitly calls
+  # Carrot.new so that a new channel is allocated for subsequent operations.
+  def Carrot.method_missing(meth, *args, &blk)
+    Carrot.default.__send__(meth, *args, &blk)
+  end
+
 end

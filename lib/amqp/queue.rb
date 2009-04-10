@@ -12,12 +12,6 @@ module Carrot::AMQP
       )
     end
 
-    def delete(opts = {})
-      server.send_frame(
-        Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
-      )
-    end
-
     def pop(opts = {})
       self.delivery_tag = nil
       server.send_frame(
@@ -61,9 +55,38 @@ module Carrot::AMQP
       [method.message_count, method.consumer_count]
     end
 
+    def bind(exchange, opts = {})
+      exchange           = exchange.respond_to?(:name) ? exchange.name : exchange
+      bindings[exchange] = opts
+      server.send_frame(
+        Protocol::Queue::Bind.new({ :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts))
+      )
+    end
+
+    def unbind(exchange, opts = {})
+      exchange = exchange.respond_to?(:name) ? exchange.name : exchange
+      bindings.delete(exchange)
+
+      server.send_frame(
+        Protocol::Queue::Unbind.new({
+          :queue => name, :exchange => exchange, :routing_key => opts.delete(:key), :nowait => true }.merge(opts)
+        )
+      )
+    end
+
+    def delete(opts = {})
+      server.send_frame(
+        Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
+      )
+    end
+
   private
     def exchange
       @exchange ||= Exchange.new(server, :direct, '', :key => name)
+    end
+
+    def bindings
+      @bindings ||= {}
     end
   end
 end

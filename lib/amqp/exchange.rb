@@ -37,7 +37,9 @@ module Carrot::AMQP
     end
 
     def delete(opts = {})
-      server.send_frame(Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts)))
+      server.send_frame(
+        Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts))
+      )
     end
 
     def reset
