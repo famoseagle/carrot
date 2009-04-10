@@ -2,7 +2,7 @@
 
 A synchronous amqp client. Based on Aman's amqp client:
 
-http://github.com/tmm1/amqp/tree/master
+[http://github.com/tmm1/amqp/tree/master] (http://github.com/tmm1/amqp/tree/master)
 
 ## Example
     
