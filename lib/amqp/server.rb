@@ -36,6 +36,7 @@ module Carrot::AMQP
         log :send, data
         write(data.to_s)
       end
+      nil
     end
 
     def next_frame
