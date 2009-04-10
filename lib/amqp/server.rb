@@ -11,9 +11,6 @@ module Carrot::AMQP
     attr_reader   :host, :port, :status
     attr_accessor :channel, :ticket
 
-    class ConnectionError < StandardError; end
-    class ServerError     < StandardError; end
-    class ClientError     < StandardError; end
     class ServerDown      < StandardError; end
     class ProtocolError   < StandardError; end
 
