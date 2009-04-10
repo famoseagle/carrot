@@ -1,4 +1,4 @@
-module AMQP
+module Carrot::AMQP
   class Exchange
     attr_accessor :server, :type, :name, :opts, :key
 

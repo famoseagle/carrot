@@ -8,7 +8,7 @@ else
   require 'enumerator'
 end
 
-module AMQP
+module Carrot::AMQP
   class Buffer #:nodoc: all
     class Overflow < StandardError; end
     class InvalidType < StandardError; end

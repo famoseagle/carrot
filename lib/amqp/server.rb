@@ -2,7 +2,7 @@ require 'socket'
 require 'thread'
 require 'timeout'
 
-module AMQP
+module Carrot::AMQP
   class Server
     CONNECT_TIMEOUT = 1.0
     RETRY_DELAY     = 10.0

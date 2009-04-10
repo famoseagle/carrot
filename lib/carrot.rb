@@ -1,3 +1,12 @@
+class Carrot
+  module AMQP
+    HEADER        = "AMQP".freeze
+    VERSION_MAJOR = 8
+    VERSION_MINOR = 0
+    PORT          = 5672
+  end
+end
+  
 $:.unshift File.expand_path(File.dirname(File.expand_path(__FILE__)))
 require 'amqp/spec'
 require 'amqp/buffer'

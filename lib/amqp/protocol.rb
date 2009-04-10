@@ -1,4 +1,4 @@
-module AMQP
+module Carrot::AMQP
   module Protocol
     #:stopdoc:
     class Class::Method

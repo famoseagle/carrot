@@ -1,4 +1,4 @@
-module AMQP
+module Carrot::AMQP
   class Frame #:nodoc: all
     def initialize payload = nil, channel = 0
       @channel, @payload = channel, payload

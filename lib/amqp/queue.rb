@@ -1,4 +1,4 @@
-module AMQP
+module Carrot::AMQP
   class Queue
     attr_reader :name, :server
     attr_accessor :delivery_tag
