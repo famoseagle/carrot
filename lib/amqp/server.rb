@@ -98,7 +98,6 @@ module Carrot::AMQP
         end
         @status   = 'CONNECTED'
       rescue SocketError, SystemCallError, IOError, Timeout::Error => e
-        kill(e.message)
         raise ServerDown, e.message
       ensure
         mutex.unlock if multithread?
