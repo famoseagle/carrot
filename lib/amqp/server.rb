@@ -70,17 +70,25 @@ module Carrot::AMQP
     end
 
     def read(*args)
-      socket.read(*args)
+      send_command(:read, *args)
     end
 
     def write(*args)
-      socket.write(*args)
+      send_command(:write, *args)
     end
 
   private
 
     def buffer
       @buffer ||= Buffer.new(self)
+    end
+
+    def send_command(cmd, *args)
+      begin
+        socket.__send__(cmd, *args)
+      rescue Errno::EPIPE, IOError => e
+        raise ServerDown, e.message
+      end
     end
 
     def socket
