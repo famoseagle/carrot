@@ -129,7 +129,10 @@ module Carrot::AMQP
         )
       )
 
-      if next_method.is_a?(Protocol::Connection::Tune)
+      method = next_method
+      raise ProtocolError, "Bad AMQP Credentials. user: #{@user}, pass: #{@pass}" if method.nil?
+
+      if method.is_a?(Protocol::Connection::Tune)
         send_frame(
           Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
         )
