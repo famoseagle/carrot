@@ -34,7 +34,7 @@ class Carrot
   end
   
   def queue(name, opts = {})
-    queues[name] ||= AMQP::Queue.new(server, name, opts)
+    queues[name] ||= AMQP::Queue.new(self, name, opts)
   end
 
   def stop
@@ -46,15 +46,15 @@ class Carrot
   end
 
   def direct(name = 'amq.direct', opts = {})
-    exchanges[name] ||= Exchange.new(server, :direct, name, opts)
+    exchanges[name] ||= AMQP::Exchange.new(self, :direct, name, opts)
   end
 
   def topic(name = 'amq.topic', opts = {})
-    exchanges[name] ||= Exchange.new(server, :topic, name, opts)
+    exchanges[name] ||= AMQP::Exchange.new(self, :topic, name, opts)
   end
 
   def headers(name = 'amq.match', opts = {})
-    exchanges[name] ||= Exchange.new(server, :headers, name, opts)
+    exchanges[name] ||= AMQP::Exchange.new(self, :headers, name, opts)
   end
 
   def exchanges

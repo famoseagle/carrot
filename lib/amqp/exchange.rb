@@ -1,10 +1,11 @@
 module Carrot::AMQP
   class Exchange
-    attr_accessor :server, :type, :name, :opts, :key
+    attr_reader :server, :type, :name, :opts, :key, :carrot
 
-    def initialize(server, type, name, opts = {})
-      @server, @type, @name, @opts = server, type, name, opts
+    def initialize(carrot, type, name, opts = {})
+      @server, @type, @name, @opts = carrot.server, type, name, opts
       @key = opts[:key]
+      @carrot = carrot
 
       unless name == "amq.#{type}" or name == ''
         server.send_frame(
@@ -40,6 +41,7 @@ module Carrot::AMQP
       server.send_frame(
         Protocol::Exchange::Delete.new({ :exchange => name, :nowait => true }.merge(opts))
       )
+      carrot.exchanges.delete(name)
     end
 
     def reset

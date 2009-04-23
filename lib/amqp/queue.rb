@@ -1,12 +1,13 @@
 module Carrot::AMQP
   class Queue
-    attr_reader :name, :server
+    attr_reader :name, :server, :carrot
     attr_accessor :delivery_tag
 
-    def initialize(server, name, opts = {})
-      @server = server
+    def initialize(carrot, name, opts = {})
+      @server = carrot.server
       @opts   = opts
       @name   = name
+      @carrot = carrot
       server.send_frame(
         Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
       )
@@ -78,11 +79,12 @@ module Carrot::AMQP
       server.send_frame(
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
+      carrot.queues.delete(name)
     end
 
   private
     def exchange
-      @exchange ||= Exchange.new(server, :direct, '', :key => name)
+      @exchange ||= Exchange.new(carrot, :direct, '', :key => name)
     end
 
     def bindings
