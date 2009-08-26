@@ -24,8 +24,11 @@ module Carrot::AMQP
       self.delivery_tag = method.delivery_tag
 
       header = server.next_payload
-      msg    = server.next_payload
-      raise 'unexpected length' if msg.length < header.size
+
+      msg = ''
+      while msg.length < header.size
+        msg << server.next_payload
+      end
 
       msg
     end
