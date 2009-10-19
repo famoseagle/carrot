@@ -7,12 +7,13 @@ begin
   require 'jeweler'
   Jeweler::Tasks.new do |s|
     s.name = "carrot"
-    s.summary = %Q{TODO}
     s.email = "amos@geni.com"
     s.homepage = "http://github.com/famoseagle/carrot"
-    s.description = "TODO"
+    s.description = "A synchronous version of the ruby amqp client"
+    s.summary = "A synchronous version of the ruby amqp client"
     s.authors = ["Amos Elliston"]
   end
+  Jeweler::GemcutterTasks.new
 rescue LoadError
   puts "Jeweler not available. Install it with: sudo gem install technicalpickles-jeweler -s http://gems.github.com"
 end
