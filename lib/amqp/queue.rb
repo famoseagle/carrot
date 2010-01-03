@@ -19,7 +19,7 @@ module Carrot::AMQP
         Protocol::Basic::Get.new({ :queue => name, :consumer_tag => name, :no_ack => !opts.delete(:ack), :nowait => true }.merge(opts))
       )
       method = server.next_method
-      return unless method.is_a?(Protocol::Basic::GetOk)
+      return unless method.kind_of?(Protocol::Basic::GetOk)
 
       self.delivery_tag = method.delivery_tag
 
@@ -56,6 +56,8 @@ module Carrot::AMQP
         Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts))
       )
       method = server.next_method
+      return [nil, nil] if method.kind_of?(Protocol::Connection::Close)
+
       [method.message_count, method.consumer_count]
     end
 
