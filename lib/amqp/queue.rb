@@ -1,10 +1,9 @@
 module Carrot::AMQP
   class Queue
-    attr_reader :name, :server, :carrot
+    attr_reader   :name, :carrot
     attr_accessor :delivery_tag
 
     def initialize(carrot, name, opts = {})
-      @server = carrot.server
       @opts   = opts
       @name   = name
       @carrot = carrot
@@ -85,6 +84,10 @@ module Carrot::AMQP
         Protocol::Queue::Delete.new({ :queue => name, :nowait => true }.merge(opts))
       )
       carrot.queues.delete(name)
+    end
+
+    def server
+      carrot.server
     end
 
   private

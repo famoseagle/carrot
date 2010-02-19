@@ -27,19 +27,23 @@ class Carrot
   end
   class Error < StandardError; end
 
-  attr_accessor :server
-
   def initialize(opts = {})
-    @server = AMQP::Server.new(opts)
+    @opts = opts
   end
   
   def queue(name, opts = {})
     queues[name] ||= AMQP::Queue.new(self, name, opts)
   end
 
+  def server
+    @server ||= AMQP::Server.new(@opts)
+  end
+
   def stop
     server.close
+    @server = nil
   end
+  alias :reset :stop
 
   def queues
     @queues ||= {}

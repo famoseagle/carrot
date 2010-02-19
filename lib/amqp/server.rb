@@ -66,6 +66,8 @@ module Carrot::AMQP
       )
       puts "Error closing connection" unless next_method.is_a?(Protocol::Connection::CloseOk)
 
+    rescue ServerDown => e
+    ensure
       close_socket
     end
 
@@ -86,7 +88,7 @@ module Carrot::AMQP
     def send_command(cmd, *args)
       begin
         socket.__send__(cmd, *args)
-      rescue Errno::EPIPE, IOError => e
+      rescue Errno::EPIPE, IOError, Errno::ECONNRESET => e
         raise ServerDown, e.message
       end
     end
