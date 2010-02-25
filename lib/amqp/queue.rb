@@ -86,6 +86,12 @@ module Carrot::AMQP
       carrot.queues.delete(name)
     end
 
+    def purge(opts = {})
+      server.send_frame(
+        Protocol::Queue::Purge.new({ :queue => name, :nowait => true }.merge(opts))
+      )
+    end
+
     def server
       carrot.server
     end
