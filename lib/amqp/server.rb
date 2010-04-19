@@ -114,7 +114,7 @@ module Carrot::AMQP
       @socket.sync_close = true
       @socket.connect
 
-      if @ssl_context.verify_mode != OpenSSL::SSL::VERIFY_NONE
+      if ctx.verify_mode != OpenSSL::SSL::VERIFY_NONE
         @socket.post_connection_check(@address)
       end
     end
