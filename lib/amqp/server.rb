@@ -97,7 +97,7 @@ module Carrot::AMQP
     def send_command(cmd, *args)
       begin
         socket.__send__(cmd, *args)
-      rescue Errno::EPIPE, IOError, Errno::ECONNRESET => e
+      rescue Errno::EPIPE, IOError, Errno::ECONNRESET, Errno::EINVAL => e
         raise ServerDown, e.message
       end
     end
