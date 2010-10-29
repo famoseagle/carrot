@@ -12,6 +12,8 @@ begin
     s.description = "A synchronous version of the ruby amqp client"
     s.summary = "A synchronous version of the ruby amqp client"
     s.authors = ["Amos Elliston"]
+    s.add_development_dependency "rcov"
+    s.add_development_dependency "mocha"
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError
