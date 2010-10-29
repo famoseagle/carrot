@@ -125,7 +125,7 @@ module Carrot::AMQP
 
       send_frame(
         Protocol::Connection::StartOk.new(
-          {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => VERSION},
+          {:platform => 'Ruby', :product => 'Carrot', :information => 'http://github.com/famosagle/carrot', :version => RUBY_VERSION},
           'AMQPLAIN',
           {:LOGIN => @user, :PASSWORD => @pass},
           'en_US'
