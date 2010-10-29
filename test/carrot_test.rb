@@ -1,4 +1,4 @@
-require File.dirname(__FILE__) + '/test_helper'
+require 'test_helper'
 
 class CarrotTest < Test::Unit::TestCase
   TEST_QUEUE = '_carrot_test'

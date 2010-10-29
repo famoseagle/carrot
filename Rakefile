@@ -21,7 +21,7 @@ rescue LoadError
 end
 
 Rake::TestTask.new do |t|
-  t.libs << 'lib'
+  t.libs << ['lib', 'test']
   t.pattern = 'test/**/*_test.rb'
   t.verbose = false
 end
@@ -35,7 +35,7 @@ Rake::RDocTask.new do |rdoc|
 end
 
 Rcov::RcovTask.new do |t|
-  t.libs << 'test'
+  t.libs << ['lib', 'test']
   t.test_files = FileList['test/**/*_test.rb']
   t.verbose = true
 end
