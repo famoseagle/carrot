@@ -1,14 +1,15 @@
 module Carrot::AMQP
   class Queue
     attr_reader   :name, :carrot
-    attr_accessor :delivery_tag
+    attr_accessor :delivery_tag, :opts
 
     def initialize(carrot, name, opts = {})
       @opts   = opts
       @name   = name
       @carrot = carrot
+      @opts[:name] = name
       server.send_frame(
-        Protocol::Queue::Declare.new({ :queue => name, :nowait => true }.merge(opts))
+        Protocol::Queue::Declare.new(@opts.merge(:nowait => true))
       )
     end
 
@@ -50,9 +51,9 @@ module Carrot::AMQP
       status.last
     end
     
-    def status(opts = {}, &blk)
+    def status
       server.send_frame(
-        Protocol::Queue::Declare.new({ :queue => name, :passive => true }.merge(opts))
+        Protocol::Queue::Declare.new(opts)
       )
       method = server.next_method
       return [nil, nil] if method.kind_of?(Protocol::Connection::Close)
