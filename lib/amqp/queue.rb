@@ -7,7 +7,8 @@ module Carrot::AMQP
       @opts   = opts
       @name   = name
       @carrot = carrot
-      @opts[:name] = name
+
+      @opts[:queue] = name
       server.send_frame(
         Protocol::Queue::Declare.new(@opts.merge(:nowait => true))
       )
