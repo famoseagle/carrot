@@ -2,6 +2,12 @@ require 'socket'
 require 'thread'
 require 'timeout'
 
+begin
+  require 'openssl'
+rescue LoadError
+  warn "Unable to load SSL extension - you will be unable to make ssl connections."
+end
+
 module Carrot::AMQP
   class Server
     CONNECT_TIMEOUT = 1.0
@@ -22,6 +28,9 @@ module Carrot::AMQP
       @vhost  = opts[:vhost] || '/'
       @insist = opts[:insist]
       @status = 'NOT CONNECTED'
+
+      @use_ssl    = !!opts[:ssl]
+      @ssl_verify = opts[:ssl_verify] || OpenSSL::SSL::VERIFY_PEER
 
       @multithread = opts[:multithread]      
       start_session
@@ -93,6 +102,23 @@ module Carrot::AMQP
       end
     end
 
+    def start_ssl
+      unless defined?(OpenSSL)
+        raise "SSL Extension not installed"
+      end
+
+      ctx = OpenSSL::SSL::SSLContext.new
+      ctx.verify_mode = @ssl_verify
+
+      @socket = OpenSSL::SSL::SSLSocket.new(@socket, ctx)
+      @socket.sync_close = true
+      @socket.connect
+
+      if ctx.verify_mode != OpenSSL::SSL::VERIFY_NONE
+        @socket.post_connection_check(@address)
+      end
+    end
+
     def socket
       return @socket if @socket and not @socket.closed?
 
@@ -106,6 +132,9 @@ module Carrot::AMQP
         if Socket.constants.include? 'TCP_NODELAY'
           @socket.setsockopt Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1
         end
+
+        start_ssl if @use_ssl
+
         @status   = 'CONNECTED'
       rescue SocketError, SystemCallError, IOError, Timeout::Error => e
         msg = e.message << " - #{@host}:#{@port}"
