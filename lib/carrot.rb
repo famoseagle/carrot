@@ -61,6 +61,10 @@ class Carrot
     exchanges[name] ||= AMQP::Exchange.new(self, :headers, name, opts)
   end
 
+  def fanout(name = 'amq.fanout', opts = {})
+    exchanges[name] ||= AMQP::Exchange.new(self, :fanout, name, opts)
+  end
+
   def exchanges
     @exchanges ||= {}
   end
