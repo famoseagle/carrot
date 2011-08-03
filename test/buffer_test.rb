@@ -1,5 +1,5 @@
 require 'test_helper'
-require 'amqp/buffer'
+require 'carrot/amqp/buffer'
 
 module Carrot::AMQP
   context 'Buffer' do

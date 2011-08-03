@@ -1,7 +1,6 @@
 require 'rake'
 require 'rake/testtask'
 require 'rake/rdoctask'
-require 'rcov/rcovtask'
 
 begin
   require 'jeweler'
@@ -12,7 +11,6 @@ begin
     s.description = "A synchronous version of the ruby amqp client"
     s.summary = "A synchronous version of the ruby amqp client"
     s.authors = ["Amos Elliston"]
-    s.add_development_dependency "rcov"
     s.add_development_dependency "mocha"
   end
   Jeweler::GemcutterTasks.new
@@ -32,12 +30,6 @@ Rake::RDocTask.new do |rdoc|
   rdoc.options << '--line-numbers' << '--inline-source'
   rdoc.rdoc_files.include('README*')
   rdoc.rdoc_files.include('lib/**/*.rb')
-end
-
-Rcov::RcovTask.new do |t|
-  t.libs << ['lib', 'test']
-  t.test_files = FileList['test/**/*_test.rb']
-  t.verbose = true
 end
 
 task :default => :test
