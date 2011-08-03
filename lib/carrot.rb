@@ -8,14 +8,14 @@ class Carrot
 end
   
 $:.unshift File.expand_path(File.dirname(File.expand_path(__FILE__)))
-require 'amqp/spec'
-require 'amqp/buffer'
-require 'amqp/exchange'
-require 'amqp/frame'
-require 'amqp/header'
-require 'amqp/queue'
-require 'amqp/server'
-require 'amqp/protocol'
+require 'carrot/amqp/spec'
+require 'carrot/amqp/buffer'
+require 'carrot/amqp/exchange'
+require 'carrot/amqp/frame'
+require 'carrot/amqp/header'
+require 'carrot/amqp/queue'
+require 'carrot/amqp/server'
+require 'carrot/amqp/protocol'
 
 class Carrot
   @logging = false
