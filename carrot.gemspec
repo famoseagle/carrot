@@ -4,14 +4,14 @@
 # -*- encoding: utf-8 -*-
 
 Gem::Specification.new do |s|
-  s.name = %q{carrot}
+  s.name = "carrot"
   s.version = "1.0.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Amos Elliston"]
-  s.date = %q{2011-08-03}
-  s.description = %q{A synchronous version of the ruby amqp client}
-  s.email = %q{amos@geni.com}
+  s.date = "2011-10-07"
+  s.description = "A synchronous version of the ruby amqp client"
+  s.email = "amos@geni.com"
   s.extra_rdoc_files = [
     "LICENSE",
     "README.markdown"
@@ -42,13 +42,12 @@ Gem::Specification.new do |s|
     "test/protocol_test.rb",
     "test/test_helper.rb"
   ]
-  s.homepage = %q{http://github.com/famoseagle/carrot}
+  s.homepage = "http://github.com/famoseagle/carrot"
   s.require_paths = ["lib"]
-  s.rubygems_version = %q{1.3.7}
-  s.summary = %q{A synchronous version of the ruby amqp client}
+  s.rubygems_version = "1.8.11"
+  s.summary = "A synchronous version of the ruby amqp client"
 
   if s.respond_to? :specification_version then
-    current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
     s.specification_version = 3
 
     if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0') then
