@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = "carrot"
-  s.version = "1.1.0"
+  s.version = "1.2.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Amos Elliston"]
-  s.date = "2011-10-07"
+  s.date = "2011-10-20"
   s.description = "A synchronous version of the ruby amqp client"
   s.email = "amos@geni.com"
   s.extra_rdoc_files = [
