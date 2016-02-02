@@ -26,6 +26,7 @@ module Carrot::AMQP
       @user   = opts[:user]  || 'guest'
       @pass   = opts[:pass]  || 'guest'
       @vhost  = opts[:vhost] || '/'
+      @frame_max = opts[:frame_max] || 131072
       @insist = opts[:insist]
       @status = 'NOT CONNECTED'
 
@@ -166,7 +167,7 @@ module Carrot::AMQP
 
       if method.is_a?(Protocol::Connection::Tune)
         send_frame(
-          Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => 131072, :heartbeat => 0)
+          Protocol::Connection::TuneOk.new( :channel_max => 0, :frame_max => @frame_max, :heartbeat => 0)
         )
       end
 
