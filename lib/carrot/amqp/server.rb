@@ -34,6 +34,7 @@ module Carrot::AMQP
       @ssl_verify = opts[:ssl_verify] || OpenSSL::SSL::VERIFY_PEER
 
       @multithread = opts[:multithread]      
+      @mutex = @multithread ? Mutex.new : nil
       start_session
     end
 
@@ -125,7 +126,7 @@ module Carrot::AMQP
 
       begin
         # Attempt to connect.
-        mutex.lock if multithread?
+        @mutex&.lock
         @socket = timeout(CONNECT_TIMEOUT) do
           TCPSocket.new(host, port)
         end
@@ -141,7 +142,7 @@ module Carrot::AMQP
         msg = e.message << " - #{@host}:#{@port}"
         raise ServerDown, e.message
       ensure
-        mutex.unlock if multithread?
+        @mutex&.unlock
       end
 
       @socket
@@ -194,16 +195,12 @@ module Carrot::AMQP
 
     def close_socket(reason=nil)
       # Close the socket. The server is not considered dead.
-      mutex.lock if multithread?
+      @mutex&.lock
       @socket.close if @socket and not @socket.closed?
       @socket   = nil
       @status   = "NOT CONNECTED"
     ensure
-      mutex.unlock if multithread?
-    end
-
-    def mutex
-      @mutex ||= Mutex.new
+      @mutex&.unlock
     end
 
     def log(*args)
